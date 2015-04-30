@@ -21,4 +21,12 @@ public class ReplyTracker {
 	public void add(Message msg) {
 		replies.add(msg);
 	}
+	
+	public void removeSourceID(int sourceID) {
+		for (int i=0; i<replies.size(); ++i) {
+			if (replies.get(i).sourceID==sourceID)
+				replies.remove(i);
+			i--;
+		}
+	}
 }

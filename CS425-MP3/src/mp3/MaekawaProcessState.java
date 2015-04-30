@@ -54,7 +54,12 @@ public class MaekawaProcessState extends MaekawaProcess{
 			switch(state) {
 			case REQUEST:
 				//If we receive a reply from everyone
-				if(communication.replyTracker!=null && communication.replyTracker.isSatisfied()) {
+				if(communication.CSSTAT==procID) {
+					//Throw away the reply track since it is no longer needed
+					communication.replyTracker = null;
+					nextState();
+				}
+				else if(communication.replyTracker!=null && communication.replyTracker.isSatisfied()) {
 					//Throw away the reply track since it is no longer needed
 					communication.replyTracker = null;
 					nextState();

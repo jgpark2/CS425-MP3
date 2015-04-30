@@ -44,7 +44,7 @@ public class Main {
 			System.exit(1);
 		}
 		
-		int N = 9;
+		int N = 4;//9;
 		long cs_int = Long.parseLong(args[0]);
 		long next_req = Long.parseLong(args[1]);
 		int tot_exec_time = Integer.parseInt(args[2]);

@@ -33,6 +33,7 @@ public class MaekawaProcess extends Thread{
 	protected PriorityQueue<Message> requestsQueue;
 	protected int procID;
 	protected int CSSTAT;
+	protected long CSTS;
 	protected ReplyTracker replyTracker;
 	//protected long holdTime;
 	private MaekawaProcessState procState;
@@ -67,6 +68,7 @@ public class MaekawaProcess extends Thread{
 		requestsQueue = new PriorityQueue<Message>(N*10, comparator);
 		procID = id;
 		CSSTAT = -1;
+		CSTS=0;
 		
 		requestSet = new ArrayList<Message>();
 		/*holdTime = cs_int;
@@ -108,14 +110,14 @@ public class MaekawaProcess extends Thread{
 				
 				//if(procState.state==procState.state.HELD || procState.voted) {
 				if(CSSTAT!=-1) {
-					Message oldReq = findSourceID(CSSTAT);
-					if (oldReq.timestamp < msg.timestamp) {
+					//Message oldReq = findSourceID(CSSTAT);
+					if (CSTS < msg.timestamp) {
 						Message reply = new Message(Message.Type.FAIL, procID);
 						sendMessage(reply, msg.sourceID);
 					}
 					else {
 						Message reply = new Message(Message.Type.INQUIRE, procID);
-						sendMessage(reply, oldReq.sourceID);//TODO: unless one has been already sent
+						sendMessage(reply, CSSTAT);//TODO: unless one has been already sent
 						sendFailMessages(msg.timestamp); //TODO: right location under if? right timestamp?
 					}
 				}
@@ -131,6 +133,7 @@ public class MaekawaProcess extends Thread{
 					sendMessage(reply, msgReq.sourceID);
 					
 					CSSTAT=msgReq.sourceID;//TODO: only if the id is in S_i...?
+					CSTS=msgReq.timestamp;
 				}
 				break;
 			case REPLY:
@@ -138,6 +141,7 @@ public class MaekawaProcess extends Thread{
 				break;
 			case RELEASE:
 				CSSTAT=-1;
+				CSTS=0;
 				
 				if(!requestsQueue.isEmpty()) {
 					Message msgReq = requestsQueue.remove();
@@ -145,6 +149,7 @@ public class MaekawaProcess extends Thread{
 					sendMessage(reply, msgReq.sourceID);
 					procState.voted=true;
 					CSSTAT=msgReq.sourceID;//TODO: only if the id is in S_i...?
+					CSTS=msgReq.timestamp;
 				}
 				else
 					procState.voted=false;
@@ -155,13 +160,29 @@ public class MaekawaProcess extends Thread{
 			case INQUIRE:
 				for(int i=0; i<requestSet.size(); ++i) {
 					if(msg.type==Message.Type.FAIL){
-						replyTracker.replies.
+						//revoke grant
+						replyTracker.removeSourceID(msg.sourceID);
+						
+						Message reply = new Message(Message.Type.YIELD, procID);
+						sendMessage(reply, msg.sourceID);
 					}
 				}
 				break;
 			case YIELD:
 				CSSTAT=-1;
-				requestsQueue.add();
+				CSTS=0;
+				//requestsQueue.add(); //TODO: the YIELDing process is returned to the 
+				//priority queue in the appropriate location. 
+
+				if(!requestsQueue.isEmpty()) {
+					Message msgReq = requestsQueue.remove();
+					Message reply = new Message(Message.Type.REPLY, procID);
+					sendMessage(reply, msgReq.sourceID);
+					procState.voted=true;
+					CSSTAT=msgReq.sourceID;//TODO: only if the id is in S_i...?
+					CSTS=msgReq.timestamp;
+				}
+				
 				break;
 			default:
 				log("Message of unexpectedtype received");
