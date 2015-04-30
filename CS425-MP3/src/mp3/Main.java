@@ -93,8 +93,8 @@ public class Main {
 		int rowNum = i/rN;
 		for(int j = 0; j<rN; ++j) {
 			int value = rowNum*rN + j;
-			if (value == i) //Avoid adding my own index
-				continue;
+			//if (value == i) //Avoid adding my own index
+			//	continue;
 			vSetInd.add(value);
 		}
 		

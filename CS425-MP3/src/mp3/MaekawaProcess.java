@@ -13,6 +13,9 @@ import java.util.PriorityQueue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
+//TODO: http://static.aminer.org/pdf/PDF/000/297/662/a_dynamic_information_structure_mutual_exclusion_algorithm_for_distributed_systems.pdf
+//pg 292,293
+
 /*
  * A class representing a single process for the Maekawa Algorithm (specifically, this is a
  *  thread in this implementation. Other Maekawa Algorithms may refer to these instances as
@@ -97,29 +100,45 @@ public class MaekawaProcess extends Thread{
 			log("Received "+msg.type.name()+" message from "+msg.sourceID);
 			switch(msg.type){
 			case REQUEST:
-				if(procState.state==procState.state.HELD || procState.voted) {
-					//queue request from without replying
-					requestsQueue.add(msg);
+				requestsQueue.add(msg);
+				
+				//if(procState.state==procState.state.HELD || procState.voted) {
+				if(criticalSectionID!=-1) {
+					criticalSectionID=
 				}
 				else {
 					//send reply
 					procState.voted=true;
+					
+					Message msgReq = requestsQueue.remove();
+					
 					Message reply = new Message(Message.Type.REPLY, procID);
-					sendMessage(reply, msg.sourceID);
+					sendMessage(reply, msgReq.sourceID);
+					
+					criticalSectionID=msgReq.sourceID;
 				}
 				break;
 			case REPLY:
 				replyTracker.add(msg);
 				break;
 			case RELEASE:
+				criticalSectionID=-1;
+				
 				if(!requestsQueue.isEmpty()) {
 					Message msgReq = requestsQueue.remove();
 					Message reply = new Message(Message.Type.REPLY, procID);
 					sendMessage(reply, msgReq.sourceID);
 					procState.voted=true;
+					criticalSectionID=msgReq.sourceID;
 				}
 				else
 					procState.voted=false;
+				break;
+			case INQUIRE:
+				break;
+			case YIELD:
+				criticalSectionID=-1;
+				requestsQueue.add();
 				break;
 			default:
 				log("Message of unexpectedtype received");
@@ -141,8 +160,8 @@ public class MaekawaProcess extends Thread{
 		//Multicast (broadcast) to everyone in my voting set
 		for(Map.Entry<Integer, BlockingQueue<Message>> process : votingSet.entrySet()) {
 			
-			if (process.getValue()==msgQueue) //No need to multicast to myself
-				continue;
+			//if (process.getValue()==msgQueue) //No need to multicast to myself
+			//	continue;
 			
 			try {
 				process.getValue().put(message);
