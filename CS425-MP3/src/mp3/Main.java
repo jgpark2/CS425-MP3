@@ -1,5 +1,7 @@
 package mp3;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -38,13 +40,13 @@ public class Main {
     public static void main(String[] args) {
 		
 		if (args.length != 4) {
-			System.out.println("Usage: ./Main <cs_int> <next_req> <tot_exec_time> <option> ");
+			System.out.println("Usage: ./Main <cs_int (ms)> <next_req (ms)> <tot_exec_time (s)> <option (0/1)> ");
 			System.exit(1);
 		}
 		
 		int N = 9;
-		int cs_int = Integer.parseInt(args[0]);
-		int next_req = Integer.parseInt(args[1]);
+		long cs_int = Long.parseLong(args[0]);
+		long next_req = Long.parseLong(args[1]);
 		int tot_exec_time = Integer.parseInt(args[2]);
 		int option = Integer.parseInt(args[3]);
 		
@@ -59,7 +61,7 @@ public class Main {
 		
 		//Create the N=9 processes
 		for(int pid=0; pid<N; ++pid) {
-			MaekawaProcess proc = new MaekawaProcess(N, pid, procQueues.get(pid), cs_int);
+			MaekawaProcess proc = new MaekawaProcess(N, pid, procQueues.get(pid), cs_int, next_req);
 			processes.add(proc);
 			proc.populateVotingSet(calcVotingSet(procQueues, N ,pid));
 		}
@@ -68,13 +70,21 @@ public class Main {
 		for(int pid=0; pid<N; ++pid) {
 			processes.get(pid).start();
 		}
-       
+		
+		long startTime = System.currentTimeMillis();
+		while((int)((System.currentTimeMillis()-startTime)/1000) < tot_exec_time) {
+			
+		}
+		
+		System.out.println("Total execution time is up!");
+		System.exit(0);
+		return;
     }
 
-	private static ArrayList<BlockingQueue<Message>> calcVotingSet(
+	private static Map<Integer,BlockingQueue<Message>> calcVotingSet(
 			ArrayList<BlockingQueue<Message>> allQueues, int N, int i) {
 		
-		ArrayList<BlockingQueue<Message>> votingSet = new ArrayList<BlockingQueue<Message>> ();
+		Map<Integer, BlockingQueue<Message>> votingSet = new HashMap<Integer, BlockingQueue<Message>> ();
 		ArrayList<Integer> vSetInd = new ArrayList<Integer>();
 		
 		int rN = (int) Math.sqrt(N);
@@ -83,6 +93,8 @@ public class Main {
 		int rowNum = i/rN;
 		for(int j = 0; j<rN; ++j) {
 			int value = rowNum*rN + j;
+			if (value == i) //Avoid adding my own index
+				continue;
 			vSetInd.add(value);
 		}
 		
@@ -90,14 +102,15 @@ public class Main {
 		int colNum = i % rN;
 		for(int j = 0; j<rN; ++j) {
 			int value = colNum+rN*j;
-			if (value == i) //Avoid adding my own index twice
+			if (value == i) //Avoid adding my own index
 				continue;
 			vSetInd.add(value);
 		}
 		
 		System.out.print("Voting set for i="+i+": [");
 		for(int j=0; j<vSetInd.size(); ++j) {
-			votingSet.add( allQueues.get(vSetInd.get(j)) );
+			int pid = vSetInd.get(j);
+			votingSet.put(pid, allQueues.get(pid));
 			System.out.print(vSetInd.get(j)+",");
 		}
 		System.out.println("]");

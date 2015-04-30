@@ -16,20 +16,24 @@ public class MaekawaProcessState extends MaekawaProcess{
 		}
 	}
 	
-	long holdTime;
-	boolean voted = false;
+	long holdHeldTime;
+	long holdReleaseTime;
+	long startTime;
+	boolean voted;
 	
 	State state;
 	
 	MaekawaProcess communication;
 	
-	public MaekawaProcessState(MaekawaProcess p, int procID, long cs_int) {
+	public MaekawaProcessState(MaekawaProcess p, int procID, long cs_int, long next_req) {
 		super();
 		
+		voted = false;
 		communication = p;
 		
 		this.procID =procID; 
-		holdTime = cs_int;
+		holdHeldTime = cs_int;
+		holdReleaseTime = next_req;
 		
 		if (DEBUG)
 			log("Entered Init State.");
@@ -49,23 +53,28 @@ public class MaekawaProcessState extends MaekawaProcess{
 		while(true) {
 			switch(state) {
 			case REQUEST:
-				//TODO:When some condition is met
-				if(false)
+				//If we receive a reply from everyone
+				if(communication.replyTracker!=null && communication.replyTracker.isSatisfied()) {
+					//Throw away the reply track since it is no longer needed
+					communication.replyTracker = null;
 					nextState();
+				}
 				break;
 			case HELD:
 				//Inside Critical Section
 				
 				//Hold state for cs_int milliseconds
-				long startTime = System.currentTimeMillis();
-				while(holdTime > System.currentTimeMillis()-startTime) {
-					
+				if(holdHeldTime > System.currentTimeMillis()-startTime) {
+					continue;
 				}
-				nextState();
+				else
+					nextState();
 				break;
 			case RELEASE:
-				//Perform Exit Code
-				
+				//After performing exit code, hold this state for next_req milliseconds
+				if(holdHeldTime > System.currentTimeMillis()-startTime) {
+					continue;
+				}
 				nextState();
 				break;
 			default:
@@ -84,22 +93,27 @@ public class MaekawaProcessState extends MaekawaProcess{
 		switch(state) {
 		case REQUEST:
 			//Execute Entry Code
+			
 			//Multicast request to everyone in my voting set
-			communication.multicast(new Message(Message.Type.REQUEST, procID));
+			Message msgReq = new Message(System.currentTimeMillis(), Message.Type.REQUEST, procID);
+			communication.replyTracker=new ReplyTracker(msgReq, communication.votingSet.size());
+			communication.multicast(msgReq);
 			break;
 		case HELD:
 			//Inside Critical Section
 			
 			//Hold state for cs_int milliseconds
-			long startTime = System.currentTimeMillis();
-			while(holdTime > System.currentTimeMillis()-startTime) {
-				
-			}
-			nextState();
+			startTime = System.currentTimeMillis();
 			break;
 		case RELEASE:
 			//Perform Exit Code
-			nextState();
+			
+			//Hold state for next_req milliseconds
+			startTime = System.currentTimeMillis();
+			
+			//Multicast release to all processes in my voting set
+			Message msgRel = new Message(System.currentTimeMillis(), Message.Type.RELEASE, procID);
+			communication.multicast(msgRel);
 			break;
 		default:
 			log("hit an invalid state!");

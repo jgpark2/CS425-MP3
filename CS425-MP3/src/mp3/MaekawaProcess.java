@@ -7,6 +7,9 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.AbstractQueue;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -24,14 +27,16 @@ public class MaekawaProcess extends Thread{
 	
 	protected int N;
 	protected BlockingQueue<Message> msgQueue;
-	protected BlockingQueue<Message> requestsQueue;
+	protected PriorityQueue<Message> requestsQueue;
 	protected int procID;
+	protected int criticalSectionID;
+	protected ReplyTracker replyTracker;
 	//protected long holdTime;
 	private MaekawaProcessState procState;
 	
 	//State state;
 	
-	protected ArrayList<BlockingQueue<Message>> votingSet;
+	protected Map<Integer, BlockingQueue<Message>> votingSet;
 	
 	public MaekawaProcess() {
 		
@@ -44,18 +49,28 @@ public class MaekawaProcess extends Thread{
 	 *  
 	 * Start the process on "Initial" state.
 	 */
-	public MaekawaProcess(int N, int id, BlockingQueue<Message> queue, long cs_int) {
+	public MaekawaProcess(int N, int id, BlockingQueue<Message> queue, long cs_int, long next_req) {
 		this.N = N;
 		msgQueue = queue;
-		requestsQueue = new ArrayBlockingQueue<Message>(N*10);
+		Comparator<Message> comparator = new Comparator<Message>() {
+	        public int compare(Message msg1, Message msg2) {
+	        	if (msg1.timestamp==msg2.timestamp)
+	        		msg1.timestamp+=1;
+	            return ((Long)msg1.timestamp).compareTo((Long)msg2.timestamp);
+	        }
+		};
+		requestsQueue = new PriorityQueue<Message>(N*10, comparator);
 		procID = id;
+		criticalSectionID = -1;
 		/*holdTime = cs_int;
 		
 		if (DEBUG)
 			log("Entered Init State.");
 		state = State.INIT;*/
 		
-		procState = new MaekawaProcessState(this, procID, cs_int);
+		replyTracker = null;
+		
+		procState = new MaekawaProcessState(this, procID, cs_int, next_req);
 	}
 	
 	
@@ -79,9 +94,32 @@ public class MaekawaProcess extends Thread{
 				break;
 			}
 			
+			log("Received "+msg.type.name()+" message from "+msg.sourceID);
 			switch(msg.type){
 			case REQUEST:
-				log("Received REQUEST message from "+msg.sourceID);
+				if(procState.state==procState.state.HELD || procState.voted) {
+					//queue request from without replying
+					requestsQueue.add(msg);
+				}
+				else {
+					//send reply
+					procState.voted=true;
+					Message reply = new Message(Message.Type.REPLY, procID);
+					sendMessage(reply, msg.sourceID);
+				}
+				break;
+			case REPLY:
+				replyTracker.add(msg);
+				break;
+			case RELEASE:
+				if(!requestsQueue.isEmpty()) {
+					Message msgReq = requestsQueue.remove();
+					Message reply = new Message(Message.Type.REPLY, procID);
+					sendMessage(reply, msgReq.sourceID);
+					procState.voted=true;
+				}
+				else
+					procState.voted=false;
 				break;
 			default:
 				log("Message of unexpectedtype received");
@@ -91,17 +129,25 @@ public class MaekawaProcess extends Thread{
 		
 	}
 
+	private void sendMessage(Message reply, int destinationID) {
+		try {
+			votingSet.get(destinationID).put(reply);
+		} catch (InterruptedException e) {
+			log("Reply Interrupted.");
+		}
+	}
+
 	public void multicast(Message message) {
 		//Multicast (broadcast) to everyone in my voting set
-		for(BlockingQueue<Message> process : votingSet) {
+		for(Map.Entry<Integer, BlockingQueue<Message>> process : votingSet.entrySet()) {
 			
-			if (process==msgQueue) //No need to multicast to myself
+			if (process.getValue()==msgQueue) //No need to multicast to myself
 				continue;
 			
 			try {
-				process.put(message);
+				process.getValue().put(message);
 			} catch (InterruptedException e) {
-				log("Put Process Interrupted.");
+				log("Multicast Put Interrupted.");
 				break;
 			}
 		}
@@ -109,7 +155,7 @@ public class MaekawaProcess extends Thread{
 	}
 	
 	public void populateVotingSet(
-			ArrayList<BlockingQueue<Message>> procQueues) {
+			Map<Integer, BlockingQueue<Message>> procQueues) {
 		this.votingSet = procQueues;
 	}
 	
