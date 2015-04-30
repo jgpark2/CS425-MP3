@@ -5,7 +5,9 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.AbstractQueue;
 import java.util.ArrayList;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
 /*
@@ -17,32 +19,19 @@ public class MaekawaProcess extends Thread{
 	
 	final boolean DEBUG = true;
 	
-	public enum State {
-		INIT, REQUEST, HELD, RELEASE, UNK;
-		
-		public static State next(State s){
-			switch(s) {
-			case INIT: return REQUEST;
-			case REQUEST: return HELD;
-			case HELD: return RELEASE;
-			case RELEASE: return REQUEST;
-			}
-			return UNK;
-		}
-	}
-	
 	//This is where all output from "show" commands goes
 	protected BufferedWriter out;
 	
 	protected int N;
 	protected BlockingQueue<Message> msgQueue;
+	protected BlockingQueue<Message> requestsQueue;
 	protected int procID;
 	//protected long holdTime;
 	private MaekawaProcessState procState;
 	
 	//State state;
 	
-	protected ArrayList<BlockingQueue<Message>> procQueues;
+	protected ArrayList<BlockingQueue<Message>> votingSet;
 	
 	public MaekawaProcess() {
 		
@@ -58,6 +47,7 @@ public class MaekawaProcess extends Thread{
 	public MaekawaProcess(int N, int id, BlockingQueue<Message> queue, long cs_int) {
 		this.N = N;
 		msgQueue = queue;
+		requestsQueue = new ArrayBlockingQueue<Message>(N*10);
 		procID = id;
 		/*holdTime = cs_int;
 		
@@ -65,13 +55,13 @@ public class MaekawaProcess extends Thread{
 			log("Entered Init State.");
 		state = State.INIT;*/
 		
-		procState = new MaekawaProcessState(procID, cs_int);
+		procState = new MaekawaProcessState(this, procID, cs_int);
 	}
 	
 	
 	/*
-	 * Thread is started when connections with all other processes are established
-	 *  (we have references to all their blocking queues).
+	 * Thread is started when connections with all other processes of my voting set
+	 *  are established (we have references to all their blocking queues).
 	 * Start our state manager.
 	 * This thread simply fetches new in-bound messages from its queue now.
 	 */
@@ -85,17 +75,42 @@ public class MaekawaProcess extends Thread{
 			try {
 				msg = msgQueue.take();
 			} catch (InterruptedException e) {
-				log("Process Interrupted.");
+				log("Take Process Interrupted.");
 				break;
 			}
 			
+			switch(msg.type){
+			case REQUEST:
+				log("Received REQUEST message from "+msg.sourceID);
+				break;
+			default:
+				log("Message of unexpectedtype received");
+				break;
+			}
 		}
 		
 	}
 
-	public void populateQueueReferences(
+	public void multicast(Message message) {
+		//Multicast (broadcast) to everyone in my voting set
+		for(BlockingQueue<Message> process : votingSet) {
+			
+			if (process==msgQueue) //No need to multicast to myself
+				continue;
+			
+			try {
+				process.put(message);
+			} catch (InterruptedException e) {
+				log("Put Process Interrupted.");
+				break;
+			}
+		}
+			
+	}
+	
+	public void populateVotingSet(
 			ArrayList<BlockingQueue<Message>> procQueues) {
-		this.procQueues = procQueues;		
+		this.votingSet = procQueues;
 	}
 	
 	protected void log(String str) {
