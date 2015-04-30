@@ -32,10 +32,12 @@ public class MaekawaProcess extends Thread{
 	protected BlockingQueue<Message> msgQueue;
 	protected PriorityQueue<Message> requestsQueue;
 	protected int procID;
-	protected int criticalSectionID;
+	protected int CSSTAT;
 	protected ReplyTracker replyTracker;
 	//protected long holdTime;
 	private MaekawaProcessState procState;
+	
+	protected ArrayList<Message> requestSet;
 	
 	//State state;
 	
@@ -64,7 +66,9 @@ public class MaekawaProcess extends Thread{
 		};
 		requestsQueue = new PriorityQueue<Message>(N*10, comparator);
 		procID = id;
-		criticalSectionID = -1;
+		CSSTAT = -1;
+		
+		requestSet = new ArrayList<Message>();
 		/*holdTime = cs_int;
 		
 		if (DEBUG)
@@ -103,10 +107,21 @@ public class MaekawaProcess extends Thread{
 				requestsQueue.add(msg);
 				
 				//if(procState.state==procState.state.HELD || procState.voted) {
-				if(criticalSectionID!=-1) {
-					criticalSectionID=
+				if(CSSTAT!=-1) {
+					Message oldReq = findSourceID(CSSTAT);
+					if (oldReq.timestamp < msg.timestamp) {
+						Message reply = new Message(Message.Type.FAIL, procID);
+						sendMessage(reply, msg.sourceID);
+					}
+					else {
+						Message reply = new Message(Message.Type.INQUIRE, procID);
+						sendMessage(reply, oldReq.sourceID);//TODO: unless one has been already sent
+						sendFailMessages(msg.timestamp); //TODO: right location under if? right timestamp?
+					}
 				}
 				else {
+					//Crit Section is free
+					
 					//send reply
 					procState.voted=true;
 					
@@ -115,29 +130,37 @@ public class MaekawaProcess extends Thread{
 					Message reply = new Message(Message.Type.REPLY, procID);
 					sendMessage(reply, msgReq.sourceID);
 					
-					criticalSectionID=msgReq.sourceID;
+					CSSTAT=msgReq.sourceID;//TODO: only if the id is in S_i...?
 				}
 				break;
 			case REPLY:
 				replyTracker.add(msg);
 				break;
 			case RELEASE:
-				criticalSectionID=-1;
+				CSSTAT=-1;
 				
 				if(!requestsQueue.isEmpty()) {
 					Message msgReq = requestsQueue.remove();
 					Message reply = new Message(Message.Type.REPLY, procID);
 					sendMessage(reply, msgReq.sourceID);
 					procState.voted=true;
-					criticalSectionID=msgReq.sourceID;
+					CSSTAT=msgReq.sourceID;//TODO: only if the id is in S_i...?
 				}
 				else
 					procState.voted=false;
 				break;
+			case FAIL:
+				requestSet.add(msg);
+				break;
 			case INQUIRE:
+				for(int i=0; i<requestSet.size(); ++i) {
+					if(msg.type==Message.Type.FAIL){
+						replyTracker.replies.
+					}
+				}
 				break;
 			case YIELD:
-				criticalSectionID=-1;
+				CSSTAT=-1;
 				requestsQueue.add();
 				break;
 			default:
@@ -146,6 +169,16 @@ public class MaekawaProcess extends Thread{
 			}
 		}
 		
+	}
+
+	private void sendFailMessages(long timestamp) {
+		if(!requestsQueue.isEmpty()) {
+			for(Message msg : requestsQueue)
+				if (msg.timestamp>timestamp) {
+					Message reply = new Message(Message.Type.FAIL, procID);
+					sendMessage(reply, msg.sourceID);
+				}
+		}
 	}
 
 	private void sendMessage(Message reply, int destinationID) {
@@ -180,6 +213,16 @@ public class MaekawaProcess extends Thread{
 	
 	protected void log(String str) {
 		System.out.println(procID+": "+str);
+	}
+	
+	protected Message findSourceID(int ID) {
+		if(!requestsQueue.isEmpty()) {
+			for(Message msg : requestsQueue)
+				if (msg.sourceID==ID)
+					return msg;
+		}
+		
+		return null;
 	}
 
 }
