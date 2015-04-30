@@ -106,6 +106,31 @@ public class MaekawaProcess extends Thread{
 			log("Received "+msg.type.name()+" message from "+msg.sourceID);
 			switch(msg.type){
 			case REQUEST:
+				if(procState.state==procState.state.HELD || procState.voted) {
+					if (CSTS < msg.timestamp) {
+						Message reply = new Message(Message.Type.FAIL, procID);
+						sendMessage(reply, msg.sourceID);
+						
+					//TODO:queue?
+					requestsQueue.add(msg);
+					}
+					else {
+						Message reply = new Message(Message.Type.INQUIRE, procID);
+						sendMessage(reply, CSSTAT);//TODO: unless one has been already sent
+					}
+				}
+				else {
+					//send reply
+					procState.voted=true;
+					Message reply = new Message(Message.Type.REPLY, procID);
+					sendMessage(reply, msg.sourceID);
+					
+					CSSTAT=msg.sourceID;
+					CSTS=msg.timestamp;
+				}
+				break;
+				
+				/*
 				requestsQueue.add(msg);
 				
 				//if(procState.state==procState.state.HELD || procState.voted) {
@@ -135,7 +160,7 @@ public class MaekawaProcess extends Thread{
 					CSSTAT=msgReq.sourceID;//TODO: only if the id is in S_i...?
 					CSTS=msgReq.timestamp;
 				}
-				break;
+				break;*/
 			case REPLY:
 				replyTracker.add(msg);
 				break;
@@ -162,6 +187,7 @@ public class MaekawaProcess extends Thread{
 					if(msg.type==Message.Type.FAIL){
 						//revoke grant
 						replyTracker.removeSourceID(msg.sourceID);
+						procState.voted=false;
 						
 						Message reply = new Message(Message.Type.YIELD, procID);
 						sendMessage(reply, msg.sourceID);

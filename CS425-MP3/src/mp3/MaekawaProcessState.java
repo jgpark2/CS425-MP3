@@ -54,12 +54,12 @@ public class MaekawaProcessState extends MaekawaProcess{
 			switch(state) {
 			case REQUEST:
 				//If we receive a reply from everyone
-				if(communication.CSSTAT==procID) {
+				/*if(communication.CSSTAT==procID) {
 					//Throw away the reply track since it is no longer needed
 					communication.replyTracker = null;
 					nextState();
 				}
-				else if(communication.replyTracker!=null && communication.replyTracker.isSatisfied()) {
+				else */if(communication.replyTracker!=null && communication.replyTracker.isSatisfied()) {
 					//Throw away the reply track since it is no longer needed
 					communication.replyTracker = null;
 					nextState();
@@ -77,7 +77,7 @@ public class MaekawaProcessState extends MaekawaProcess{
 				break;
 			case RELEASE:
 				//After performing exit code, hold this state for next_req milliseconds
-				if(holdHeldTime > System.currentTimeMillis()-startTime) {
+				if(holdReleaseTime > System.currentTimeMillis()-startTime) {
 					continue;
 				}
 				nextState();
@@ -103,6 +103,7 @@ public class MaekawaProcessState extends MaekawaProcess{
 			Message msgReq = new Message(System.currentTimeMillis(), Message.Type.REQUEST, procID);
 			communication.replyTracker=new ReplyTracker(msgReq, communication.votingSet.size());
 			communication.multicast(msgReq);
+			log("Multicast my request");
 			break;
 		case HELD:
 			//Inside Critical Section
