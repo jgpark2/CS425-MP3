@@ -107,10 +107,10 @@ public class MaekawaProcess extends Thread{
 			}
 			
 			
-			if(msg.type.name()=="REPLY") {
+/*			if(msg.type.name()=="REPLY") {
 				log("Received "+msg.type.name()+" message from "+msg.sourceID+ " "+replyTracker.acksToStr());
 			}
-			else
+			else*/
 				log("Received "+msg.type.name()+" message from "+msg.sourceID);
 			
 			//Catch up timestamp if needed
@@ -122,27 +122,32 @@ public class MaekawaProcess extends Thread{
 				requestsQueue.add(msg);
 				
 				if( yetToVote() ) {
+log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...replying!");
 					grantTopRequest();
 				}
 				else {
+					//msg = requestsQueue.remove();//REVERT TS
 					Message criticalSectionMsg = procState.voted;
-					if(criticalSectionMsg.timestamp < msg.timestamp) {
+					if(criticalSectionMsg.timestamp < msg.timestamp) { //TODO: < or <= ?
+log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...failing!");
 						//Reply with FAIL
 						failsSent.add(msg);
 						sendMessage(Message.Type.FAIL, msg.sourceID);
 					}
 					else {
+log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...inquiring!");
 						if(!procState.sentInquiry) {
 							sendMessage(Message.Type.INQUIRE, criticalSectionMsg.sourceID);
 							procState.sentInquiry = true;
 						}
 					}
-					//send FAIL to anything larger than criticalSectionMsg.timestamp in priority queue
-					failAll(criticalSectionMsg.timestamp);
+					//send FAIL to anything larger than msg.timestamp in priority queue
+					failAll(msg.timestamp);
 				}
 				break;
 				
 			case REPLY:
+				log("Received "+msg.type.name()+" message from "+msg.sourceID+ " "+replyTracker.acksToStr());
 				replyTracker.add(msg);
 				//replyTracker.print(procID);
 				break;
@@ -157,14 +162,23 @@ public class MaekawaProcess extends Thread{
 			
 			case FAIL:
 				replyTracker.add(msg);
+				
 				break;
 				
 			case INQUIRE:
 				if(revokeCondition()) {
+if (replyTracker.fails.size()>0)
+	log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...yielding :( fails");
+if(replyTracker.yielded!=-1) 
+	log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...yielding :( already yielded");
 					replyTracker.removeSourceID(msg.sourceID);
 					replyTracker.yielded=msg.sourceID;
 					sendMessage(Message.Type.YIELD, msg.sourceID);
 				}
+if(procState.state==PState.HELD)
+	log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...IGNORED! i'm in CS :D");
+else
+	log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...IGNORED! no reason!?");
 				break;
 				
 			case YIELD:
@@ -191,7 +205,7 @@ public class MaekawaProcess extends Thread{
 					continue;
 				else {
 					failsSent.add(request);
-					sendMessage(Message.Type.FAIL, request.sourceID);
+					sendMessage(Message.Type.FAIL, request.sourceID);//TODO: do we keep them in the priq? yes i think
 				}
 				
 		}
@@ -200,6 +214,8 @@ public class MaekawaProcess extends Thread{
 	private void grantTopRequest() {
 		if(!requestsQueue.isEmpty()) {
 			Message msgReq = requestsQueue.remove();
+			
+			timestamp = Math.max(timestamp,msgReq.timestamp); //Probably unecessary
 			
 			if (msgReq.type==Message.Type.REQUEST){
 				procState.castVote(msgReq);
@@ -246,8 +262,7 @@ public class MaekawaProcess extends Thread{
 
 	private Message sendMessage(Message.Type type, int destinationID) {
 		++timestamp;
-		Message reply = new Message(timestamp, type, procID);
-		
+		 Message reply = new Message(timestamp, type, procID);
 		try {
 			votingSet.get(destinationID).put(reply);
 		} catch (InterruptedException e) {
@@ -281,6 +296,9 @@ public class MaekawaProcess extends Thread{
 	}
 	
 	private boolean revokeCondition() {
+		if(procState.state==PState.HELD)
+			return false;
+		
 		if (replyTracker.fails.size()>0)
 			return true;
 		
@@ -300,7 +318,7 @@ public class MaekawaProcess extends Thread{
 	}
 	
 	protected void log(String str) {
-		if(option==-1)
+		//if(option==-1)
 			System.out.println(procID+": "+str);
 	}
 

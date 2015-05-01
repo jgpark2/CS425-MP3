@@ -69,6 +69,11 @@ public class Main {
 		//Start the N processes in the "Initial" state as given in the MP
 		for(int pid=0; pid<N; ++pid) {
 			processes.get(pid).start();
+			try {
+				Thread.sleep(5);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
 		}
 		
 		long startTime = System.currentTimeMillis();

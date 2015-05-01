@@ -72,7 +72,7 @@ public class MaekawaProcessState extends MaekawaProcess{
 						System.out.println(System.currentTimeMillis()+ " "+procID + " "+communication.replyTracker.acksToStr());
 					
 					//Throw away the reply track since it is no longer needed
-//TODO:					communication.replyTracker = null;
+					communication.replyTracker = null; //TODO: NO, keep it, unless u get rid of revoke condition for HELD state
 					nextPState();
 				}
 				else if (flag){
@@ -155,10 +155,10 @@ public class MaekawaProcessState extends MaekawaProcess{
 		Message oldVote = voted;
 		voted = msg;
 		
-		if(oldVote != voted) {//TODO:?
+		//if(oldVote != voted) {//TODO:?
 			sentInquiry = false;
 			communication.failsSent.clear();
-		}
+		//}
 		
 	}
 	

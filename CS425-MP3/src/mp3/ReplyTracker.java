@@ -31,7 +31,7 @@ public class ReplyTracker {
 		if (msg.type==Message.Type.FAIL)
 			fails.add(msg);
 		else if(msg.type==Message.Type.REPLY) {
-			if(yielded==msg.sourceID)
+			if(yielded==msg.sourceID)//TODO:?
 				yielded=-1;
 			acks.add(msg);
 		}
@@ -72,6 +72,8 @@ public class ReplyTracker {
 		for(Message reply : acks){
 			str+=reply.sourceID+", ";
 		}
+		if(acks.size()>0)
+			str = str.substring(0, str.length()-2);
 		str+="]";
 		return str;
 	}
