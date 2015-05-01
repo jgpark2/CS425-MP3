@@ -10,6 +10,7 @@ public class Message {
 	long timestamp;
 	Type type;
 	int sourceID;
+	Message submsg;
 	
 	public Message(String msg) {
 		this.msg = msg;
@@ -19,6 +20,13 @@ public class Message {
 		this.timestamp = System.currentTimeMillis();
 		this.type = type;
 		sourceID = procID;
+	}
+	
+	public Message(Type type, int procID, Message submsg) {
+		this.timestamp = System.currentTimeMillis();
+		this.type = type;
+		sourceID = procID;
+		this.submsg = submsg;
 	}
 	
 	public Message(long timestamp, Type type, int procID) {

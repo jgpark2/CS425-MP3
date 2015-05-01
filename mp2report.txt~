@@ -3,7 +3,8 @@ Jonathan Park, jgpark2
 
 Instructions for how to compile and run code:
 In cs425_mp2 directory:
- > java -cp CS425_MP2/bin/ mp2.PeerToPeerLookupService
+ > java -cp CS425-MP3/bin mp3.Main
+
 
 
 Performance Data

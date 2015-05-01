@@ -61,7 +61,7 @@ public class Main {
 		
 		//Create the N=9 processes
 		for(int pid=0; pid<N; ++pid) {
-			MaekawaProcess proc = new MaekawaProcess(N, pid, procQueues.get(pid), cs_int, next_req);
+			MaekawaProcess proc = new MaekawaProcess(N, pid, procQueues.get(pid), cs_int, next_req, option);
 			processes.add(proc);
 			proc.populateVotingSet(calcVotingSet(procQueues, N ,pid));
 		}
@@ -93,8 +93,8 @@ public class Main {
 		int rowNum = i/rN;
 		for(int j = 0; j<rN; ++j) {
 			int value = rowNum*rN + j;
-			if (value == i) //Avoid adding my own index
-				continue;
+			//if (value == i) //Avoid adding my own index
+			//	continue;
 			vSetInd.add(value);
 		}
 		
