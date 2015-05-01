@@ -69,10 +69,10 @@ public class MaekawaProcessState extends MaekawaProcess{
 				//If we receive a reply from everyone
 				if(communication.replyTracker!=null && communication.replyTracker.isSatisfied()) {
 					if (option!=-1)
-						System.out.println(System.currentTimeMillis()+ " "+procID + " "+communication.replyTracker.repliesToStr());
+						System.out.println(System.currentTimeMillis()+ " "+procID + " "+communication.replyTracker.acksToStr());
 					
 					//Throw away the reply track since it is no longer needed
-					//communication.replyTracker = null;
+//TODO:					communication.replyTracker = null;
 					nextPState();
 				}
 				else if (flag){
@@ -155,13 +155,16 @@ public class MaekawaProcessState extends MaekawaProcess{
 		Message oldVote = voted;
 		voted = msg;
 		
-		if(oldVote != voted) //TODO:?
+		if(oldVote != voted) {//TODO:?
 			sentInquiry = false;
+			communication.failsSent.clear();
+		}
 		
 	}
 	
 	public void resetVote() {
 		voted = null;
 		sentInquiry = false;
+		communication.failsSent.clear();
 	}
 }

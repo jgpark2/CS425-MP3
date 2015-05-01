@@ -36,6 +36,7 @@ public class MaekawaProcess extends Thread{
 	
 	private MaekawaProcessState procState;
 	
+	protected ArrayList<Message> failsSent;
 	protected ArrayList<Message> yieldSet;
 	
 	protected long timestamp;
@@ -63,8 +64,6 @@ public class MaekawaProcess extends Thread{
 		msgQueue = queue;
 		Comparator<Message> comparator = new Comparator<Message>() {
 	        public int compare(Message msg1, Message msg2) {
-	        	//if (msg1.timestamp==msg2.timestamp)
-	        	//	msg1.timestamp+=1;
 	            return ((Long)msg1.timestamp).compareTo((Long)msg2.timestamp);
 	        }
 		};
@@ -74,6 +73,7 @@ public class MaekawaProcess extends Thread{
 		timestamp = 0;
 		
 		yieldSet= new ArrayList<Message>();
+		failsSent = new ArrayList<Message>();
 		
 		replyTracker = null;
 		
@@ -108,7 +108,7 @@ public class MaekawaProcess extends Thread{
 			
 			
 			if(msg.type.name()=="REPLY") {
-				log("Received "+msg.type.name()+" message from "+msg.sourceID+ " "+replyTracker.repliesToStr());
+				log("Received "+msg.type.name()+" message from "+msg.sourceID+ " "+replyTracker.acksToStr());
 			}
 			else
 				log("Received "+msg.type.name()+" message from "+msg.sourceID);
@@ -128,11 +128,17 @@ public class MaekawaProcess extends Thread{
 					Message criticalSectionMsg = procState.voted;
 					if(criticalSectionMsg.timestamp < msg.timestamp) {
 						//Reply with FAIL
+						failsSent.add(msg);
 						sendMessage(Message.Type.FAIL, msg.sourceID);
 					}
 					else {
-						sendMessage(Message.Type.INQUIRE, criticalSectionMsg.sourceID);
+						if(!procState.sentInquiry) {
+							sendMessage(Message.Type.INQUIRE, criticalSectionMsg.sourceID);
+							procState.sentInquiry = true;
+						}
 					}
+					//send FAIL to anything larger than criticalSectionMsg.timestamp in priority queue
+					failAll(criticalSectionMsg.timestamp);
 				}
 				break;
 				
@@ -144,51 +150,31 @@ public class MaekawaProcess extends Thread{
 			case RELEASE:
 				log("RELEASEEEE");
 				resetLock();
-				while(!requestsQueue.isEmpty() || yetToVote()) {
+				while(!requestsQueue.isEmpty() && yetToVote()) {
 					grantTopRequest();
 				}
 				break;
-				
-			/*case FAIL:
+			
+			case FAIL:
 				replyTracker.add(msg);
 				break;
 				
 			case INQUIRE:
-				if(replyTracker==null){
-					//most likely in HELD state already
-					break;
-				}
-				if(replyTracker.fails.size()>0) {
-					//revoke the old grant i got from him and send yield
+				if(revokeCondition()) {
 					replyTracker.removeSourceID(msg.sourceID);
-					Message reply = new Message(Message.Type.YIELD, procID, msg.submsg);
-					sendMessage(reply, msg.sourceID);
-					yieldSet.add(msg);
-				}
-				else if (yieldSet.size()>0){
-					for(int i=0; i<yieldSet.size(); i++) {
-						if (replyTracker.findSourceID(yieldSet.get(i).sourceID)) {
-							break;
-						}
-					}
-					//revoke the old grant i got from him and send yield
-					replyTracker.removeSourceID(msg.sourceID);
-					Message reply = new Message(Message.Type.YIELD, procID, msg.submsg);
-					sendMessage(reply, msg.sourceID);
-					yieldSet.add(msg);
+					replyTracker.yielded=msg.sourceID;
+					sendMessage(Message.Type.YIELD, msg.sourceID);
 				}
 				break;
 				
 			case YIELD:
-				
+				Message oldRequest = procState.voted;
 				resetLock();
-				
-				msg.submsg.timestamp=System.currentTimeMillis();//TODO:?
-				requestsQueue.add(msg.submsg); 
-				
-				pollReq();
-				
-				break;*/
+				requestsQueue.add(oldRequest);
+				while(!requestsQueue.isEmpty() || yetToVote()) {
+					grantTopRequest();
+				}
+				break;
 				
 			default:
 				log("Message of unexpectedtype received");
@@ -198,14 +184,25 @@ public class MaekawaProcess extends Thread{
 		
 	}
 
+	private void failAll(long minimumTS) {
+		for(Message request : requestsQueue) {
+			if (request.timestamp > minimumTS)
+				if(failsSent.contains(request))
+					continue;
+				else {
+					failsSent.add(request);
+					sendMessage(Message.Type.FAIL, request.sourceID);
+				}
+				
+		}
+	}
+
 	private void grantTopRequest() {
 		if(!requestsQueue.isEmpty()) {
 			Message msgReq = requestsQueue.remove();
 			
 			if (msgReq.type==Message.Type.REQUEST){
-				castVote(msgReq);
-				//CSSTAT=msgReq.sourceID;
-				//CSTS=msgReq.timestamp;
+				procState.castVote(msgReq);
 				
 				sendMessage(Message.Type.REPLY, msgReq.sourceID);
 			}
@@ -219,7 +216,12 @@ public class MaekawaProcess extends Thread{
 	 */
 	protected void entry() {
 		//Multicast my ENTER request to everyone in my voting set
-		multicastMessage(Message.Type.REQUEST);
+		++timestamp;
+		Message myRequest = new Message(timestamp, Message.Type.REQUEST, procID);
+		
+		replyTracker = new ReplyTracker(myRequest, votingSet.size());
+		
+		multicast(myRequest);		
 	}
 	
 	/*
@@ -238,31 +240,11 @@ public class MaekawaProcess extends Thread{
 		multicastMessage(Message.Type.RELEASE);
 	}
 	
-	/*protected void pollReq() {
-		if(!requestsQueue.isEmpty()) {
-			//msgQueue.add(requestsQueue.remove());
-
-			Message msgReq = requestsQueue.remove();
-			if (msgReq.type==Message.Type.REQUEST){
-				procState.voted=true;
-				CSSTAT=msgReq.sourceID;
-				CSTS=msgReq.timestamp;
-				
-				Message reply = new Message(Message.Type.REPLY, procID);
-				sendMessage(reply, msgReq.sourceID);
-			}
-			else
-				log("Nonrequest message in requestsQueue :(");
-		}
-	}*/
-	
 	private void resetLock() {
 		procState.resetVote();
-		//CSSTAT = -1;
-		//CSTS = Long.MAX_VALUE;
 	}
 
-	private void sendMessage(Message.Type type, int destinationID) {
+	private Message sendMessage(Message.Type type, int destinationID) {
 		++timestamp;
 		Message reply = new Message(timestamp, type, procID);
 		
@@ -271,12 +253,11 @@ public class MaekawaProcess extends Thread{
 		} catch (InterruptedException e) {
 			log("Reply Interrupted.");
 		}
+		
+		return reply;
 	}
 
-	public void multicastMessage(Message.Type type) {
-		++timestamp;
-		Message message = new Message(timestamp, type, procID);
-		
+	private void multicast(Message message) {
 		//Multicast (broadcast) to everyone in my voting set
 		for(Map.Entry<Integer, BlockingQueue<Message>> process : votingSet.entrySet()) {
 			//if (process.getValue()==msgQueue) //No need to multicast to myself
@@ -288,7 +269,25 @@ public class MaekawaProcess extends Thread{
 				break;
 			}
 		}
-			
+	}
+	
+	public Message multicastMessage(Message.Type type) {
+		++timestamp;
+		Message message = new Message(timestamp, type, procID);
+		
+		multicast(message);
+		
+		return message;
+	}
+	
+	private boolean revokeCondition() {
+		if (replyTracker.fails.size()>0)
+			return true;
+		
+		if(replyTracker.yielded!=-1) 
+			return true;
+		
+		return false;
 	}
 	
 	private boolean yetToVote() {
@@ -301,7 +300,7 @@ public class MaekawaProcess extends Thread{
 	}
 	
 	protected void log(String str) {
-		//if(option==-1)
+		if(option==-1)
 			System.out.println(procID+": "+str);
 	}
 

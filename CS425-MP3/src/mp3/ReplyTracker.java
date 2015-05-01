@@ -5,41 +5,54 @@ import java.util.Arrays;
 
 public class ReplyTracker {
 
+	private static final boolean DEBUG = true;
+	
 	Message originalRequest;
 	int replyLimit;
-	ArrayList<Message> replies;
+	ArrayList<Message> acks;
 	ArrayList<Message> fails;
+
+	public int yielded;
 	
 	public ReplyTracker(Message request, int K) {
 		originalRequest = request;
 		replyLimit = K;
-		replies = new ArrayList<Message>();
+		acks = new ArrayList<Message>();
 		fails = new ArrayList<Message>();
+		
+		yielded = -1;
 	}
 
 	public boolean isSatisfied() {
-		return replies.size()>=replyLimit;
+		return acks.size()>=replyLimit;
 	}
 
 	public void add(Message msg) {
 		if (msg.type==Message.Type.FAIL)
 			fails.add(msg);
-		else 
-			replies.add(msg);
+		else if(msg.type==Message.Type.REPLY) {
+			if(yielded==msg.sourceID)
+				yielded=-1;
+			acks.add(msg);
+		}
+		else
+			System.out.println("Tried to put non-reply or non-fail message to reply tracker! Ignored.");
 	}
 	
 	public boolean findSourceID(int sourceID) {
-		for (int i=0; i<replies.size(); ++i) {
-			if (replies.get(i).sourceID==sourceID)
+		for (int i=0; i<acks.size(); ++i) {
+			if (acks.get(i).sourceID==sourceID)
 				return true;
 		}
 		return false;
 	}
 	
 	public void removeSourceID(int sourceID) {
-		for (int i=0; i<replies.size(); ++i) {
-			if (replies.get(i).sourceID==sourceID) {
-				replies.remove(i);
+		for (int i=0; i<acks.size(); ++i) {
+			if (acks.get(i).sourceID==sourceID) {
+				acks.remove(i);
+				if(DEBUG)
+					System.out.println("revoked");
 				i--;
 			}
 		}
@@ -47,16 +60,16 @@ public class ReplyTracker {
 
 	public void print(int id) {
 		String str = id+": [";
-		for(Message reply : replies){
+		for(Message reply : acks){
 			str+=reply.type.name()+"("+reply.sourceID+"), ";
 		}
 		str+="]";
 		System.out.println(str);
 	}
 	
-	public String repliesToStr() {
+	public String acksToStr() {
 		String str = "[";
-		for(Message reply : replies){
+		for(Message reply : acks){
 			str+=reply.sourceID+", ";
 		}
 		str+="]";
