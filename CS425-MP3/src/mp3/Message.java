@@ -15,7 +15,7 @@ public class Message {
 	public Message(String msg) {
 		this.msg = msg;
 	}
-
+	/*
 	public Message(Type type, int procID) {
 		this.timestamp = System.currentTimeMillis();
 		this.type = type;
@@ -27,11 +27,18 @@ public class Message {
 		this.type = type;
 		sourceID = procID;
 		this.submsg = submsg;
-	}
+	}*/
 	
 	public Message(long timestamp, Type type, int procID) {
 		this.timestamp = timestamp;
 		this.type = type;
 		sourceID = procID;
+	}
+	
+	public Message(long timestamp, Type type, int procID, Message submsg) {
+		this.timestamp = timestamp;
+		this.type = type;
+		sourceID = procID;
+		this.submsg = submsg;
 	}
 }

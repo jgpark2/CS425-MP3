@@ -19,8 +19,9 @@ public class MaekawaProcessState extends MaekawaProcess{
 	long holdHeldTime;
 	long holdReleaseTime;
 	long startTime;
-	int voted;
-	final int NONE = -1; 
+	
+	Message voted;
+	boolean sentInquiry = false;
 	
 	PState state;
 	
@@ -29,12 +30,13 @@ public class MaekawaProcessState extends MaekawaProcess{
 	
 	boolean flag = false;
 	
+	
 	public MaekawaProcessState(MaekawaProcess p, int procID, long cs_int, long next_req, int option) {
 		super();
 		
 		this.option = option;
 		
-		voted = NONE;
+		voted = null;
 		communication = p;
 		
 		this.procID =procID; 
@@ -53,15 +55,17 @@ public class MaekawaProcessState extends MaekawaProcess{
 	 * entry to the critical section.
 	 */
 	public void run() {
-		nextPState();
+		nextPState(); //Get out of Init state
 		
-		//Constantly check conditions for which we can proceed to the next PState
+		//Constantly check conditions for which we can proceed to the next state
 		while(true) {
 			
 			//communication.pollReq();
 			
 			switch(state) {
 			case REQUEST:
+				//Continue Entry Code
+				
 				//If we receive a reply from everyone
 				if(communication.replyTracker!=null && communication.replyTracker.isSatisfied()) {
 					if (option!=-1)
@@ -75,22 +79,30 @@ public class MaekawaProcessState extends MaekawaProcess{
 					String str = ""+communication.replyTracker.replyLimit;
 				}
 				break;
+				
 			case HELD:
 				//Inside Critical Section
 				
-				//Hold PState for cs_int milliseconds
+				//Hold this state for cs_int milliseconds
 				if(holdHeldTime > System.currentTimeMillis()-startTime) {
 					continue;
 				}
-				else
-					nextPState();
-				break;
-			case RELEASE:
-				//After performing exit code, hold this PState for next_req milliseconds
-				if(holdHeldTime > System.currentTimeMillis()-startTime) {
-					continue;
-				}
+				
 				nextPState();
+				
+				break;
+				
+			case RELEASE:
+				//Outside of Critical Section
+				
+				//Banned from Requesting again for a while
+				//hold this state for next_req milliseconds
+				if(holdReleaseTime > System.currentTimeMillis()-startTime) {
+					continue;
+				}
+				
+				nextPState();
+				
 				break;
 			default:
 				log("hit an invalid State!");
@@ -108,38 +120,48 @@ public class MaekawaProcessState extends MaekawaProcess{
 		switch(state) {
 		case REQUEST:
 			//Execute Entry Code
-			
-			//Multicast request to everyone in my voting set
-			Message msgReq = new Message(Message.Type.REQUEST, procID);
-			communication.replyTracker=new ReplyTracker(msgReq, communication.votingSet.size());
-			communication.multicast(msgReq);
+			communication.entry();
 			break;
+			
 		case HELD:
-			//Inside Critical Section
+			//Now inside the Critical Section
+			communication.onEntry();
 			
 			communication.yieldSet.clear();
-			//Hold PState for cs_int milliseconds
+			
+			//Time marker needed to hold HELD state for specified cs_int milliseconds
 			startTime = System.currentTimeMillis();
+			
 			flag=true;
 			break;
+			
 		case RELEASE:
 			//Perform Exit Code
+			communication.exitCS();
 			
-			//Hold PState for next_req milliseconds
+			//Time marker needed to hold RELEASE state for next_req milliseconds before we can request again
 			startTime = System.currentTimeMillis();
-			
-			//Multicast release to all processes in my voting set
-			Message msgRel = new Message(Message.Type.RELEASE, procID);
-			communication.multicast(msgRel);
 			break;
+			
 		default:
-			log("hit an invalid PState!");
+			log("hit an invalid state!");
 			throw new RuntimeException();
 		}
 		
 	}
 	
+	public void castVote(Message msg) {
+		
+		Message oldVote = voted;
+		voted = msg;
+		
+		if(oldVote != voted) //TODO:?
+			sentInquiry = false;
+		
+	}
+	
 	public void resetVote() {
-		voted = NONE;
+		voted = null;
+		sentInquiry = false;
 	}
 }
