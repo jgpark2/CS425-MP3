@@ -167,25 +167,28 @@ log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...inquiring!")
 				
 			case INQUIRE:
 				if(revokeCondition()) {
-if (replyTracker.fails.size()>0)
+/*if (replyTracker.fails.size()>0)
 	log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...yielding :( fails");
 if(replyTracker.yielded!=-1) 
 	log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...yielding :( already yielded");
+*/
 					replyTracker.removeSourceID(msg.sourceID);
 					replyTracker.yielded=msg.sourceID;
 					sendMessage(Message.Type.YIELD, msg.sourceID);
 				}
+/*
 if(procState.state==PState.HELD)
 	log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...IGNORED! i'm in CS :D");
 else
 	log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...IGNORED! no reason!?");
+*/
 				break;
 				
 			case YIELD:
 				Message oldRequest = procState.voted;
 				resetLock();
 				requestsQueue.add(oldRequest);
-				while(!requestsQueue.isEmpty() || yetToVote()) {
+				while(!requestsQueue.isEmpty() && yetToVote()) {
 					grantTopRequest();
 				}
 				break;
@@ -218,9 +221,13 @@ else
 			timestamp = Math.max(timestamp,msgReq.timestamp); //Probably unecessary
 			
 			if (msgReq.type==Message.Type.REQUEST){
-				procState.castVote(msgReq);
-				
-				sendMessage(Message.Type.REPLY, msgReq.sourceID);
+				if(yetToVote()) {
+					procState.castVote(msgReq);
+					sendMessage(Message.Type.REPLY, msgReq.sourceID);
+				}
+				else{
+					requestsQueue.add(msgReq);
+				}
 			}
 			else
 				log("Nonrequest message in requestsQueue :(");
