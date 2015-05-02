@@ -65,11 +65,9 @@ public class StateManager extends Thread{
 					
 				//If we receive a reply from everyone
 				if(parent.replyTracker!=null && parent.replyTracker.isSatisfied()) {
-					if (option!=-1)
-						System.out.println(System.currentTimeMillis()+ " "+parent.procID + " "+parent.replyTracker.acksToStr());
 					
 					//Throw away the reply track since it is no longer needed
-					parent.replyTracker = null; //TODO: NO, keep it, unless u get rid of revoke condition for HELD state
+					//parent.replyTracker = null; //TODO: NO, keep it, unless u get rid of revoke condition for HELD state
 					nextPState();
 				}
 				break;
@@ -145,16 +143,21 @@ public class StateManager extends Thread{
 	
 	public void castVote(Message msg) {
 		
+		
 		Message oldVote = voted;
 		voted = msg;
 		
-		sentInquiry = false;
+		//if(oldVote != voted) {
+			sentInquiry = false;
+			//TODO:? parent.failsSent.clear();
+		//}
 		
 	}
 	
 	public void resetVote() {
 		voted = null;
 		sentInquiry = false;
+		//TODO:? parent.failsSent.clear();
 	}
 	
 	protected void log(String str) {

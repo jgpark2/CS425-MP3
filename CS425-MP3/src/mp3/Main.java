@@ -2,8 +2,7 @@ package mp3;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /*
  * ./Main <cs_int>	<next_req>	<tot_exec_time> <option>
@@ -35,7 +34,7 @@ import java.util.concurrent.BlockingQueue;
 public class Main {
 	
 	static ArrayList<MaekawaProcess> processes;
-	static ArrayList<BlockingQueue<Message>> procQueues;
+	static ArrayList<LinkedBlockingQueue<Message>> procQueues;
 	
     public static void main(String[] args) {
 		
@@ -51,11 +50,11 @@ public class Main {
 		int option = Integer.parseInt(args[3]);
 		
 		processes = new ArrayList<MaekawaProcess> ();
-		procQueues = new ArrayList<BlockingQueue<Message>> ();
+		procQueues = new ArrayList<LinkedBlockingQueue<Message>> ();
 		
 		//Create each processes' communication channels
 		for(int i=0; i<N; ++i) {
-			BlockingQueue<Message> queue = new ArrayBlockingQueue<Message>(N*10);
+			LinkedBlockingQueue<Message> queue = new LinkedBlockingQueue<Message>(N*10);
 			procQueues.add(queue);
 		}
 		
@@ -70,7 +69,7 @@ public class Main {
 		for(int pid=0; pid<N; ++pid) {
 			processes.get(pid).start();
 			try {
-				Thread.sleep(1);
+				Thread.sleep(5);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
@@ -86,10 +85,10 @@ public class Main {
 		return;
     }
 
-	private static Map<Integer,BlockingQueue<Message>> calcVotingSet(
-			ArrayList<BlockingQueue<Message>> allQueues, int N, int i) {
+	private static Map<Integer,LinkedBlockingQueue<Message>> calcVotingSet(
+			ArrayList<LinkedBlockingQueue<Message>> allQueues, int N, int i) {
 		
-		Map<Integer, BlockingQueue<Message>> votingSet = new HashMap<Integer, BlockingQueue<Message>> ();
+		Map<Integer, LinkedBlockingQueue<Message>> votingSet = new HashMap<Integer, LinkedBlockingQueue<Message>> ();
 		ArrayList<Integer> vSetInd = new ArrayList<Integer>();
 		
 		int rN = (int) Math.sqrt(N);

@@ -10,8 +10,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.PriorityQueue;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import mp3.StateManager.PState;
 
@@ -28,7 +27,7 @@ public class MaekawaProcess extends Thread{
 	protected BufferedWriter out;
 	
 	protected int N;
-	protected BlockingQueue<Message> msgQueue;
+	protected LinkedBlockingQueue<Message> msgQueue;
 	protected PriorityQueue<Message> requestsQueue;
 	protected int procID;
 	protected ReplyTracker replyTracker;
@@ -40,7 +39,7 @@ public class MaekawaProcess extends Thread{
 	
 	protected long timestamp;
 	
-	protected Map<Integer, BlockingQueue<Message>> votingSet;
+	protected Map<Integer, LinkedBlockingQueue<Message>> votingSet;
 
 	private int option;
 	
@@ -51,7 +50,7 @@ public class MaekawaProcess extends Thread{
 	 *  
 	 * Start the process on "Initial" state.
 	 */
-	public MaekawaProcess(int N, int id, BlockingQueue<Message> queue, long cs_int, long next_req, int option) {
+	public MaekawaProcess(int N, int id, LinkedBlockingQueue<Message> queue, long cs_int, long next_req, int option) {
 		this.N = N;
 		this.option = option;
 		msgQueue = queue;
@@ -116,26 +115,17 @@ public class MaekawaProcess extends Thread{
 				else {
 					Message criticalSectionMsg = procState.voted;
 					if(criticalSectionMsg.timestamp <= msg.timestamp) {
-						if(procID==1) {
-							log("Failing "+msg.sourceID+" in reply to "+msg.type.name()+" from "+msg.sourceID+" since I replied to earlier-REQ"+criticalSectionMsg.sourceID+" already.");
-						}
 						//Reply with FAIL
 						failsSent.add(msg);
 						sendMessage(Message.Type.FAIL, msg.sourceID);
 					}
 					else {
 						if(!procState.sentInquiry) {
-							if(procID==1) {
-								log("Inquiring "+criticalSectionMsg.sourceID+" in reply to "+msg.type.name()+" from "+msg.sourceID+" since I replied to later-REQ"+criticalSectionMsg.sourceID+" already.");
-							}
 							sendMessage(Message.Type.INQUIRE, criticalSectionMsg.sourceID);
 							procState.sentInquiry = true;
 						}
 						else {
 							//Do nothing
-							if(procID==1) {
-								log("Did nothing in reply to "+msg.type.name()+" from "+msg.sourceID+" since I replied to later-REQ"+criticalSectionMsg.sourceID+" already, bu tI already sent an Inquiry.");
-							}
 						}
 					}
 					//send FAIL to anything larger than msg.timestamp in priority queue
@@ -149,7 +139,6 @@ public class MaekawaProcess extends Thread{
 				break;
 				
 			case RELEASE:
-				log("RELEASEEEE");
 				resetLock();
 				while(!requestsQueue.isEmpty() && yetToVote()) {
 					grantTopRequest();
@@ -207,9 +196,6 @@ public class MaekawaProcess extends Thread{
 			
 			if (msgReq.type==Message.Type.REQUEST){
 				if(yetToVote()) {
-					if(procID==1) {
-						log("Replying/granting "+msgReq.sourceID+" to "+msgReq.type.name()+" from "+msgReq.sourceID);
-					}
 					procState.castVote(msgReq);
 					sendMessage(Message.Type.REPLY, msgReq.sourceID);
 				}
@@ -228,6 +214,7 @@ public class MaekawaProcess extends Thread{
 	protected void entry() {
 		//Multicast my ENTER request to everyone in my voting set
 		++timestamp;
+		//timestamp = System.currentTimeMillis();
 		Message myRequest = new Message(timestamp, Message.Type.REQUEST, procID);
 		
 		replyTracker = new ReplyTracker(myRequest, votingSet.size());
@@ -239,6 +226,10 @@ public class MaekawaProcess extends Thread{
 	 * Critical Section code
 	 */
 	public void onEntry() {
+		if (option!=-1)
+			System.out.println(System.currentTimeMillis()+ " "+procID + " "+replyTracker.acksToStr());
+		
+		
 		//Do whatever is needed here.
 		
 	}
@@ -257,6 +248,7 @@ public class MaekawaProcess extends Thread{
 
 	private Message sendMessage(Message.Type type, int destinationID) {
 		++timestamp;
+		//timestamp = System.currentTimeMillis();
 		 Message reply = new Message(timestamp, type, procID);
 		try {
 			votingSet.get(destinationID).put(reply);
@@ -269,7 +261,7 @@ public class MaekawaProcess extends Thread{
 
 	private void multicast(Message message) {
 		//Multicast (broadcast) to everyone in my voting set
-		for(Map.Entry<Integer, BlockingQueue<Message>> process : votingSet.entrySet()) {
+		for(Map.Entry<Integer, LinkedBlockingQueue<Message>> process : votingSet.entrySet()) {
 			try {
 				process.getValue().put(message);
 			} catch (InterruptedException e) {
@@ -281,6 +273,7 @@ public class MaekawaProcess extends Thread{
 	
 	public Message multicastMessage(Message.Type type) {
 		++timestamp;
+		//timestamp = System.currentTimeMillis();
 		Message message = new Message(timestamp, type, procID);
 		
 		multicast(message);
@@ -289,8 +282,8 @@ public class MaekawaProcess extends Thread{
 	}
 	
 	private boolean revokeCondition() {
-		if(procState.state==PState.HELD)
-			return false;
+		/*if(procState.state==PState.HELD)
+			return false;*/
 		
 		if (replyTracker.fails.size()>0)
 			return true;
@@ -306,11 +299,12 @@ public class MaekawaProcess extends Thread{
 	}
 	
 	public void populateVotingSet(
-			Map<Integer, BlockingQueue<Message>> procQueues) {
+			Map<Integer, LinkedBlockingQueue<Message>> procQueues) {
 		this.votingSet = procQueues;
 	}
 	
 	protected void log(String str) {
+		//System.out.print("");
 		if(option==-1)
 			System.out.println(procID+": "+str);
 	}
