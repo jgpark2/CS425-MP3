@@ -5,7 +5,7 @@ import java.util.Arrays;
 
 public class ReplyTracker {
 
-	private static final boolean DEBUG = true;
+	private static final boolean DEBUG = false;
 	
 	Message originalRequest;
 	int replyLimit;
