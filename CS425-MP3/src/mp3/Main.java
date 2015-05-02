@@ -70,7 +70,7 @@ public class Main {
 		for(int pid=0; pid<N; ++pid) {
 			processes.get(pid).start();
 			try {
-				Thread.sleep(5);
+				Thread.sleep(1);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
@@ -98,8 +98,6 @@ public class Main {
 		int rowNum = i/rN;
 		for(int j = 0; j<rN; ++j) {
 			int value = rowNum*rN + j;
-			//if (value == i) //Avoid adding my own index
-			//	continue;
 			vSetInd.add(value);
 		}
 		
@@ -107,7 +105,7 @@ public class Main {
 		int colNum = i % rN;
 		for(int j = 0; j<rN; ++j) {
 			int value = colNum+rN*j;
-			if (value == i) //Avoid adding my own index
+			if (value == i) //Avoid adding my own index a second time
 				continue;
 			vSetInd.add(value);
 		}

@@ -13,7 +13,7 @@ import java.util.PriorityQueue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-import mp3.MaekawaProcessState.PState;
+import mp3.StateManager.PState;
 
 /*
  * A class representing a single process for the Maekawa Algorithm (specifically, this is a
@@ -31,25 +31,18 @@ public class MaekawaProcess extends Thread{
 	protected BlockingQueue<Message> msgQueue;
 	protected PriorityQueue<Message> requestsQueue;
 	protected int procID;
-	protected int criticalSectionID;
 	protected ReplyTracker replyTracker;
 	
-	private MaekawaProcessState procState;
+	private StateManager procState;
 	
 	protected ArrayList<Message> failsSent;
 	protected ArrayList<Message> yieldSet;
 	
 	protected long timestamp;
-	//protected int CSSTAT;
-	//protected long CSTS;
 	
 	protected Map<Integer, BlockingQueue<Message>> votingSet;
 
 	private int option;
-	
-	public MaekawaProcess() {
-		
-	}
 	
 	/*
 	 * MaekawaProcess constructor
@@ -69,7 +62,6 @@ public class MaekawaProcess extends Thread{
 		};
 		requestsQueue = new PriorityQueue<Message>(N*10, comparator);
 		procID = id;
-		criticalSectionID = -1;
 		timestamp = 0;
 		
 		yieldSet= new ArrayList<Message>();
@@ -77,7 +69,8 @@ public class MaekawaProcess extends Thread{
 		
 		replyTracker = null;
 		
-		procState = new MaekawaProcessState(this, procID, cs_int, next_req, option);
+		procState = new StateManager(this, cs_int, next_req, option);
+		this.option = option;
 		resetLock();
 	}
 	
@@ -107,11 +100,7 @@ public class MaekawaProcess extends Thread{
 			}
 			
 			
-/*			if(msg.type.name()=="REPLY") {
-				log("Received "+msg.type.name()+" message from "+msg.sourceID+ " "+replyTracker.acksToStr());
-			}
-			else*/
-				log("Received "+msg.type.name()+" message from "+msg.sourceID);
+			log("Received "+msg.type.name()+" message from "+msg.sourceID);
 			
 			//Catch up timestamp if needed
 			timestamp = Math.max(timestamp,msg.timestamp);
@@ -121,24 +110,32 @@ public class MaekawaProcess extends Thread{
 			case REQUEST:
 				requestsQueue.add(msg);
 				
-				if( yetToVote() ) {
-log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...replying!");
+				if( yetToVote()) {
 					grantTopRequest();
 				}
 				else {
-					//msg = requestsQueue.remove();//REVERT TS
 					Message criticalSectionMsg = procState.voted;
-					if(criticalSectionMsg.timestamp < msg.timestamp) { //TODO: < or <= ?
-log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...failing!");
+					if(criticalSectionMsg.timestamp <= msg.timestamp) {
+						if(procID==1) {
+							log("Failing "+msg.sourceID+" in reply to "+msg.type.name()+" from "+msg.sourceID+" since I replied to earlier-REQ"+criticalSectionMsg.sourceID+" already.");
+						}
 						//Reply with FAIL
 						failsSent.add(msg);
 						sendMessage(Message.Type.FAIL, msg.sourceID);
 					}
 					else {
-log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...inquiring!");
 						if(!procState.sentInquiry) {
+							if(procID==1) {
+								log("Inquiring "+criticalSectionMsg.sourceID+" in reply to "+msg.type.name()+" from "+msg.sourceID+" since I replied to later-REQ"+criticalSectionMsg.sourceID+" already.");
+							}
 							sendMessage(Message.Type.INQUIRE, criticalSectionMsg.sourceID);
 							procState.sentInquiry = true;
+						}
+						else {
+							//Do nothing
+							if(procID==1) {
+								log("Did nothing in reply to "+msg.type.name()+" from "+msg.sourceID+" since I replied to later-REQ"+criticalSectionMsg.sourceID+" already, bu tI already sent an Inquiry.");
+							}
 						}
 					}
 					//send FAIL to anything larger than msg.timestamp in priority queue
@@ -147,9 +144,8 @@ log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...inquiring!")
 				break;
 				
 			case REPLY:
-				log("Received "+msg.type.name()+" message from "+msg.sourceID+ " "+replyTracker.acksToStr());
+				log("Received "+msg.type.name()+" message from "+msg.sourceID+ " "+replyTracker.acksToStr()+" out of: "+replyTracker.replyLimit);
 				replyTracker.add(msg);
-				//replyTracker.print(procID);
 				break;
 				
 			case RELEASE:
@@ -167,21 +163,10 @@ log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...inquiring!")
 				
 			case INQUIRE:
 				if(revokeCondition()) {
-/*if (replyTracker.fails.size()>0)
-	log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...yielding :( fails");
-if(replyTracker.yielded!=-1) 
-	log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...yielding :( already yielded");
-*/
 					replyTracker.removeSourceID(msg.sourceID);
 					replyTracker.yielded=msg.sourceID;
 					sendMessage(Message.Type.YIELD, msg.sourceID);
 				}
-/*
-if(procState.state==PState.HELD)
-	log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...IGNORED! i'm in CS :D");
-else
-	log("Received "+msg.type.name()+" message from "+msg.sourceID+ " ...IGNORED! no reason!?");
-*/
 				break;
 				
 			case YIELD:
@@ -208,7 +193,7 @@ else
 					continue;
 				else {
 					failsSent.add(request);
-					sendMessage(Message.Type.FAIL, request.sourceID);//TODO: do we keep them in the priq? yes i think
+					sendMessage(Message.Type.FAIL, request.sourceID);//We still keep all the REQs in the PriQueue
 				}
 				
 		}
@@ -222,6 +207,9 @@ else
 			
 			if (msgReq.type==Message.Type.REQUEST){
 				if(yetToVote()) {
+					if(procID==1) {
+						log("Replying/granting "+msgReq.sourceID+" to "+msgReq.type.name()+" from "+msgReq.sourceID);
+					}
 					procState.castVote(msgReq);
 					sendMessage(Message.Type.REPLY, msgReq.sourceID);
 				}
@@ -282,8 +270,6 @@ else
 	private void multicast(Message message) {
 		//Multicast (broadcast) to everyone in my voting set
 		for(Map.Entry<Integer, BlockingQueue<Message>> process : votingSet.entrySet()) {
-			//if (process.getValue()==msgQueue) //No need to multicast to myself
-			//	continue;
 			try {
 				process.getValue().put(message);
 			} catch (InterruptedException e) {
