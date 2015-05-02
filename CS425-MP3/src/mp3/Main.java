@@ -2,6 +2,7 @@ package mp3;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /*
@@ -65,11 +66,13 @@ public class Main {
 			proc.populateVotingSet(calcVotingSet(procQueues, N ,pid));
 		}
 		
+		Random rng = new Random(System.currentTimeMillis());
+		
 		//Start the N processes in the "Initial" state as given in the MP
 		for(int pid=0; pid<N; ++pid) {
 			processes.get(pid).start();
 			try {
-				Thread.sleep(5);
+				Thread.sleep(rng.nextInt(2)+1);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}

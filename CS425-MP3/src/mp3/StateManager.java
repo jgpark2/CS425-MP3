@@ -22,7 +22,7 @@ public class StateManager extends Thread{
 	long holdReleaseTime;
 	protected int option;
 	
-	Message voted;
+	private Message voted;
 	boolean sentInquiry = false;
 	
 	PState state;
@@ -56,13 +56,12 @@ public class StateManager extends Thread{
 		//Constantly check conditions for which we can proceed to the next state
 		while(true) {
 			
+			System.out.print("");
 			
 			switch(state) {
 			case REQUEST:
 				//Continue Entry Code
 				
-				System.out.print("");
-					
 				//If we receive a reply from everyone
 				if(parent.replyTracker!=null && parent.replyTracker.isSatisfied()) {
 					
@@ -76,12 +75,9 @@ public class StateManager extends Thread{
 				//Inside Critical Section
 				
 				//Hold this state for cs_int milliseconds
-				if(holdHeldTime > System.currentTimeMillis()-startTime) {
-					break;
-				}
-				
-				nextPState();
-				
+				if(holdHeldTime <= System.currentTimeMillis()-startTime)
+					nextPState();
+					
 				break;
 				
 			case RELEASE:
@@ -89,16 +85,13 @@ public class StateManager extends Thread{
 				
 				//Banned from Requesting again for a while
 				//hold this state for next_req milliseconds
-				if(holdReleaseTime > System.currentTimeMillis()-startTime) {
-					continue;
-				}
-				
-				nextPState();
-				
+				if(holdReleaseTime <= System.currentTimeMillis()-startTime)
+					nextPState();
+					
 				break;
-			default:
+			/*default:
 				log("hit an invalid State!");
-				throw new RuntimeException();
+				throw new RuntimeException();*/
 			}
 		}
 	}
@@ -119,7 +112,7 @@ public class StateManager extends Thread{
 			//Now inside the Critical Section
 			parent.onEntry();
 			
-			parent.yieldSet.clear();
+			//parent.yieldSet.clear();//TODO:?
 			
 			//Time marker needed to hold HELD state for specified cs_int milliseconds
 			startTime = System.currentTimeMillis();
@@ -141,7 +134,7 @@ public class StateManager extends Thread{
 		
 	}
 	
-	public void castVote(Message msg) {
+	public synchronized void castVote(Message msg) {
 		
 		
 		Message oldVote = voted;
@@ -154,10 +147,14 @@ public class StateManager extends Thread{
 		
 	}
 	
-	public void resetVote() {
+	public synchronized void resetVote() {
 		voted = null;
 		sentInquiry = false;
 		//TODO:? parent.failsSent.clear();
+	}
+	
+	public synchronized Message getVote() {
+		return voted;
 	}
 	
 	protected void log(String str) {
