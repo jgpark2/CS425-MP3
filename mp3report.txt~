@@ -63,13 +63,3 @@ p6={0,3,6,7,8}
 p7={1,4,6,7,8}
 p8={2,5,6,7,8}
 
-
-To avoid deadlocks, I referred to:
-http://static.aminer.org/pdf/PDF/000/297/662/a_dynamic_information_structure_mutual_exclusion_algorithm_for_distributed_systems.pdf
-and implemented 3 additional message types:
-FAIL, INQUIRE, and YIELD.
-
-A FAIL message lets a requester know that there are other requests of earlier timestamps.
-An INQUIRE message asks the process who got our vote/grant prematurely, whether or not it has alraedy entered the critical section or not. If it hasn't yet, it encourages it to YIELD and revoke our old GRANT.
-A YIELD message (from 1st perspective of the one who sends the YIELD) simply lets a destination process know that I have yielded my request for entry, allowing the destination processes that locked up for me to unlock, much like a release that happens before I could actually enter the critical state.
-

@@ -2,8 +2,8 @@ package mp3;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
+import java.util.Random;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /*
  * ./Main <cs_int>	<next_req>	<tot_exec_time> <option>
@@ -35,7 +35,7 @@ import java.util.concurrent.BlockingQueue;
 public class Main {
 	
 	static ArrayList<MaekawaProcess> processes;
-	static ArrayList<BlockingQueue<Message>> procQueues;
+	static ArrayList<LinkedBlockingQueue<Message>> procQueues;
 	
     public static void main(String[] args) {
 		
@@ -51,11 +51,11 @@ public class Main {
 		int option = Integer.parseInt(args[3]);
 		
 		processes = new ArrayList<MaekawaProcess> ();
-		procQueues = new ArrayList<BlockingQueue<Message>> ();
+		procQueues = new ArrayList<LinkedBlockingQueue<Message>> ();
 		
 		//Create each processes' communication channels
 		for(int i=0; i<N; ++i) {
-			BlockingQueue<Message> queue = new ArrayBlockingQueue<Message>(N*10);
+			LinkedBlockingQueue<Message> queue = new LinkedBlockingQueue<Message>(N*10);
 			procQueues.add(queue);
 		}
 		
@@ -66,9 +66,16 @@ public class Main {
 			proc.populateVotingSet(calcVotingSet(procQueues, N ,pid));
 		}
 		
+		Random rng = new Random(System.currentTimeMillis());
+		
 		//Start the N processes in the "Initial" state as given in the MP
 		for(int pid=0; pid<N; ++pid) {
 			processes.get(pid).start();
+			try {
+				Thread.sleep(rng.nextInt(2)+1);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
 		}
 		
 		long startTime = System.currentTimeMillis();
@@ -81,10 +88,10 @@ public class Main {
 		return;
     }
 
-	private static Map<Integer,BlockingQueue<Message>> calcVotingSet(
-			ArrayList<BlockingQueue<Message>> allQueues, int N, int i) {
+	private static Map<Integer,LinkedBlockingQueue<Message>> calcVotingSet(
+			ArrayList<LinkedBlockingQueue<Message>> allQueues, int N, int i) {
 		
-		Map<Integer, BlockingQueue<Message>> votingSet = new HashMap<Integer, BlockingQueue<Message>> ();
+		Map<Integer, LinkedBlockingQueue<Message>> votingSet = new HashMap<Integer, LinkedBlockingQueue<Message>> ();
 		ArrayList<Integer> vSetInd = new ArrayList<Integer>();
 		
 		int rN = (int) Math.sqrt(N);
@@ -93,8 +100,6 @@ public class Main {
 		int rowNum = i/rN;
 		for(int j = 0; j<rN; ++j) {
 			int value = rowNum*rN + j;
-			//if (value == i) //Avoid adding my own index
-			//	continue;
 			vSetInd.add(value);
 		}
 		
@@ -102,7 +107,7 @@ public class Main {
 		int colNum = i % rN;
 		for(int j = 0; j<rN; ++j) {
 			int value = colNum+rN*j;
-			if (value == i) //Avoid adding my own index
+			if (value == i) //Avoid adding my own index a second time
 				continue;
 			vSetInd.add(value);
 		}

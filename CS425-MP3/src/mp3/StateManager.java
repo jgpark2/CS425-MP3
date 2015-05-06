@@ -1,6 +1,6 @@
 package mp3;
 
-public class MaekawaProcessState extends MaekawaProcess{
+public class StateManager extends Thread{
 	
 	public enum  PState {
 		INIT, REQUEST, HELD, RELEASE, UNK;
@@ -16,34 +16,30 @@ public class MaekawaProcessState extends MaekawaProcess{
 		}
 	}
 	
-	long holdHeldTime;
-	long holdReleaseTime;
 	long startTime;
 	
-	Message voted;
+	long holdHeldTime;
+	long holdReleaseTime;
+	protected int option;
+	
+	private Message voted;
 	boolean sentInquiry = false;
 	
 	PState state;
 	
-	MaekawaProcess communication;
-	protected int option;
+	MaekawaProcess parent;
 	
-	boolean flag = false;
-	
-	
-	public MaekawaProcessState(MaekawaProcess p, int procID, long cs_int, long next_req, int option) {
-		super();
+	public StateManager(MaekawaProcess parent, long cs_int, long next_req, int option) {
+		this.parent = parent;
+		
+		holdHeldTime = cs_int;
+		holdReleaseTime = next_req;
 		
 		this.option = option;
 		
 		voted = null;
-		communication = p;
 		
-		this.procID =procID; 
-		holdHeldTime = cs_int;
-		holdReleaseTime = next_req;
-		
-		if (DEBUG)
+		if (parent.DEBUG)
 			log("********Entered Init State.********");
 		state = PState.INIT;
 	}
@@ -60,27 +56,18 @@ public class MaekawaProcessState extends MaekawaProcess{
 		//Constantly check conditions for which we can proceed to the next state
 		while(true) {
 			
-			//communication.pollReq();
+			System.out.print("");
 			
 			switch(state) {
 			case REQUEST:
 				//Continue Entry Code
 				
-				if(procID==1) {
-					log("Checking if all replies...");
-				}
-					
 				//If we receive a reply from everyone
-				if(communication.replyTracker!=null && communication.replyTracker.isSatisfied()) {
-					if (option!=-1)
-						System.out.println(System.currentTimeMillis()+ " "+procID + " "+communication.replyTracker.acksToStr());
+				if(parent.replyTracker!=null && parent.replyTracker.isSatisfied()) {
 					
 					//Throw away the reply track since it is no longer needed
-					communication.replyTracker = null; //TODO: NO, keep it, unless u get rid of revoke condition for HELD state
+					//parent.replyTracker = null; //TODO: NO, keep it, unless u get rid of revoke condition for HELD state
 					nextPState();
-				}
-				else if (flag){
-					String str = ""+communication.replyTracker.replyLimit;
 				}
 				break;
 				
@@ -88,12 +75,9 @@ public class MaekawaProcessState extends MaekawaProcess{
 				//Inside Critical Section
 				
 				//Hold this state for cs_int milliseconds
-				if(holdHeldTime > System.currentTimeMillis()-startTime) {
-					break;
-				}
-				
-				nextPState();
-				
+				if(holdHeldTime <= System.currentTimeMillis()-startTime)
+					nextPState();
+					
 				break;
 				
 			case RELEASE:
@@ -101,16 +85,13 @@ public class MaekawaProcessState extends MaekawaProcess{
 				
 				//Banned from Requesting again for a while
 				//hold this state for next_req milliseconds
-				if(holdReleaseTime > System.currentTimeMillis()-startTime) {
-					continue;
-				}
-				
-				nextPState();
-				
+				if(holdReleaseTime <= System.currentTimeMillis()-startTime)
+					nextPState();
+					
 				break;
-			default:
+			/*default:
 				log("hit an invalid State!");
-				throw new RuntimeException();
+				throw new RuntimeException();*/
 			}
 		}
 	}
@@ -118,30 +99,29 @@ public class MaekawaProcessState extends MaekawaProcess{
 	protected void nextPState() {
 		state = PState.next(state);
 		
-		if(DEBUG)
+		if(parent.DEBUG)
 			log("**********State change to: "+state.name()+"************");
 		
 		switch(state) {
 		case REQUEST:
 			//Execute Entry Code
-			communication.entry();
+			parent.entry();
 			break;
 			
 		case HELD:
 			//Now inside the Critical Section
-			communication.onEntry();
+			parent.onEntry();
 			
-			communication.yieldSet.clear();
+			//parent.yieldSet.clear();//TODO:?
 			
 			//Time marker needed to hold HELD state for specified cs_int milliseconds
 			startTime = System.currentTimeMillis();
 			
-			flag=true;
 			break;
 			
 		case RELEASE:
 			//Perform Exit Code
-			communication.exitCS();
+			parent.exitCS();
 			
 			//Time marker needed to hold RELEASE state for next_req milliseconds before we can request again
 			startTime = System.currentTimeMillis();
@@ -154,21 +134,31 @@ public class MaekawaProcessState extends MaekawaProcess{
 		
 	}
 	
-	public void castVote(Message msg) {
+	public synchronized void castVote(Message msg) {
+		
 		
 		Message oldVote = voted;
 		voted = msg;
 		
-		//if(oldVote != voted) {//TODO:?
+		//if(oldVote != voted) {
 			sentInquiry = false;
-			//communication.failsSent.clear(); //TODO?
+			//TODO:? parent.failsSent.clear();
 		//}
 		
 	}
 	
-	public void resetVote() {
+	public synchronized void resetVote() {
 		voted = null;
 		sentInquiry = false;
-		//communication.failsSent.clear();//TODO:?
+		//TODO:? parent.failsSent.clear();
+	}
+	
+	public synchronized Message getVote() {
+		return voted;
+	}
+	
+	protected void log(String str) {
+		if(option==-1)
+			System.out.println(parent.procID+": "+str);
 	}
 }
